@@ -3,6 +3,9 @@ Flipper Zero transmitter for RTTL, .FMF and Morse code.
 
 It will transmit your RTTL or FMF files over PMR/LPD frequencies.
 
+USE ONLY IN MOMENTUM DEV
+
+
 DISCLAIMER
 
 This application is provided strictly for testing, educational, and development purposes only.
