@@ -1,0 +1,10 @@
+App(
+    appid="tone_tx",
+    name="Tone TX",
+    apptype=FlipperAppType.EXTERNAL,
+    entry_point="tone_tx_app",
+    requires=["gui", "storage", "dialogs"],
+    stack_size=4 * 1024,
+    fap_category="Sub-GHz",
+    fap_icon="icon.png",
+)
