@@ -1,5 +1,6 @@
 # Flipper-Zero-Tone-TX
 Flipper Zero transmitter for RTTL, .FMF and Morse code
+It will tranmit your RTTL or FMF files over PMR/LPD frequencies.
 
 DISCLAIMER
 
