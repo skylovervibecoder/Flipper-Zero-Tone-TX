@@ -1,8 +1,6 @@
 /*
  * Tone TX v1.1 - Flipper Zero (by Marcopiiit)
  *
- * For lab testing only, inside a verified Faraday cage.
- *
  * How it works: the CC1101 runs in asynchronous 2-FSK with ~2.38 kHz
  * deviation (below the 2.5 kHz limit of analog PMR). By toggling the data
  * pin level at an audio frequency, an FM receiver demodulates a square
