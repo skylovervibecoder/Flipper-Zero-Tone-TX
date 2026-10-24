@@ -1,21 +1,21 @@
 /*
- * Tone TX v1.0 - Flipper Zero (by Marcopit)
+ * Tone TX v1.1 - Flipper Zero (by Marcopiiit)
  *
- * Solo per test di laboratorio dentro una gabbia di Faraday verificata.
+ * For lab testing only, inside a verified Faraday cage.
  *
- * Funzionamento: il CC1101 e' in 2-FSK asincrono con deviazione ~2.38 kHz
- * (sotto il limite di 2.5 kHz del PMR analogico). Commutando il livello del
- * pin dati a frequenza audio, un ricevitore FM demodula un'onda quadra,
- * cioe' un tono.
- *   .fmf -> ogni nota diventa un tono alla sua frequenza
- *   .txt -> letto come musica (formato FMF con "Notes:", RTTTL oppure semplice
- *           elenco di note); se il testo non contiene note viene inviato
- *           in codice Morse (tono fisso 700 Hz)
+ * How it works: the CC1101 runs in asynchronous 2-FSK with ~2.38 kHz
+ * deviation (below the 2.5 kHz limit of analog PMR). By toggling the data
+ * pin level at an audio frequency, an FM receiver demodulates a square
+ * wave, i.e. a tone.
+ *   .fmf -> each note becomes a tone at its frequency
+ *   .txt -> read as music (FMF format with "Notes:", RTTTL, or a plain
+ *           list of notes); if the text contains no notes it is sent
+ *           as Morse code (fixed 700 Hz tone)
  *
- * Comandi: Sinistra/Destra canale (PMR 1-16, LPD 1-69), Giu cambia banda
- * PMR/LPD, Su scelta file, OK trasmetti,
- * Back durante la TX la interrompe, Back nella schermata di trasmissione
- * torna al menu iniziale (Start / Disclaimer / About), Back nel menu esce.
+ * Controls: Left/Right channel (PMR 1-16, LPD 1-69), Down switches band
+ * PMR/LPD, Up picks a file, OK transmits,
+ * Back during TX aborts it, Back on the transmit screen returns to the
+ * start menu (Start / Disclaimer / About), Back in the menu exits.
  */
 
 #include <furi.h>
@@ -36,7 +36,7 @@
 #define PMR_BASE_HZ 446006250UL
 #define PMR_STEP_HZ 12500UL
 #define PMR_CHANNELS 16
-#define LPD_BASE_HZ 433075000UL // LPD433: 69 canali da 25 kHz, 433.075-434.775 MHz
+#define LPD_BASE_HZ 433075000UL // LPD433: 69 channels of 25 kHz, 433.075-434.775 MHz
 #define LPD_STEP_HZ 25000UL
 #define LPD_CHANNELS 69
 #define TONE_MIN_HZ 300
@@ -44,12 +44,12 @@
 #define MORSE_TONE_HZ 700
 #define MORSE_UNIT_MS 80
 #define SILENCE_CHUNK_US 10000
-#define LEAD_MS 400 // portante senza tono all'inizio, per aprire lo squelch
+#define LEAD_MS 400 // toneless carrier at the start, to open the squelch
 #define TAIL_MS 200
 #define NOTE_GAP_MS 20
 
 typedef struct {
-    uint16_t freq_hz; // 0 = portante senza tono
+    uint16_t freq_hz; // 0 = carrier without tone
     uint16_t dur_ms;
 } Segment;
 
@@ -77,7 +77,7 @@ typedef struct {
     Screen screen;
     uint8_t menu_sel;
     uint8_t scroll;
-    char last_path[200]; // ultimo file scelto: il browser riparte da li'
+    char last_path[200]; // last chosen file: the browser restarts from there
     uint32_t total_ms;
     char name[32];
     char status[32];
@@ -92,7 +92,7 @@ typedef struct {
     volatile bool done;
 } TxState;
 
-/* ---------- costruzione dei segmenti ---------- */
+/* ---------- segment building ---------- */
 
 static void seg_add(SegList* l, uint16_t freq, uint32_t dur_ms) {
     if(l->count >= MAX_SEGMENTS || dur_ms == 0) return;
@@ -207,7 +207,7 @@ static void parse_fmf(char* text, SegList* l) {
     }
 }
 
-// true se una riga del testo inizia con "Notes:" (formato FMF, anche dentro un .txt)
+// true if a line of the text starts with "Notes:" (FMF format, even inside a .txt)
 static bool has_notes_line(const char* text) {
     const char* line = text;
     while(*line) {
@@ -219,7 +219,7 @@ static bool has_notes_line(const char* text) {
     return false;
 }
 
-// Token di nota valido: [durata][.]NOTA[#][ottava][.]  (NOTA = A-G oppure P per pausa)
+// Valid note token: [duration][.]NOTE[#][octave][.]  (NOTE = A-G or P for pause)
 static bool is_note_token(const char* s, size_t n) {
     size_t i = 0;
     while(i < n && s[i] >= '0' && s[i] <= '9') i++;
@@ -234,7 +234,7 @@ static bool is_note_token(const char* s, size_t n) {
     return i == n;
 }
 
-// true se TUTTO il testo e' un elenco di note (cosi' il testo normale non diventa musica a caso)
+// true if ALL the text is a list of notes (so normal text doesn't randomly become music)
 static bool looks_like_note_list(const char* text) {
     size_t tokens = 0;
     const char* p = text;
@@ -249,7 +249,7 @@ static bool looks_like_note_list(const char* text) {
     return tokens > 0;
 }
 
-// RTTTL: nome:d=4,o=5,b=120:note,note,...
+// RTTTL: name:d=4,o=5,b=120:note,note,...
 static bool is_rtttl(const char* t) {
     const char* c1 = strchr(t, ':');
     if(!c1) return false;
@@ -276,7 +276,7 @@ static void parse_rtttl(const char* text, SegList* l) {
     parse_notes(c2 + 1, bpm, dur, oct, l);
 }
 
-// Prova a leggere il testo come musica. Restituisce false se non lo e' (allora si usa il Morse).
+// Try to read the text as music. Returns false if it isn't (then Morse is used).
 static bool parse_music_text(char* text, SegList* l) {
     size_t before = l->count;
     if(has_notes_line(text)) parse_fmf(text, l);
@@ -301,7 +301,7 @@ static void build_morse(const char* text, SegList* l) {
         if(c >= 'A' && c <= 'Z') code = MORSE_AZ[c - 'A'];
         else if(c >= '0' && c <= '9') code = MORSE_09[c - '0'];
         else if(c == ' ' || c == '\n') {
-            seg_add(l, 0, 4 * MORSE_UNIT_MS); // 3 di fine lettera + 4 = spazio tra parole
+            seg_add(l, 0, 4 * MORSE_UNIT_MS); // 3 end-of-letter + 4 = word space
             continue;
         } else continue;
 
@@ -313,18 +313,18 @@ static void build_morse(const char* text, SegList* l) {
     }
 }
 
-/* ---------- trasmissione ---------- */
+/* ---------- transmission ---------- */
 
-// Preset CC1101: 2-FSK asincrono, deviazione ~2.38 kHz. Coppie registro/valore
-// terminate da 0,0, poi la PATABLE (8 byte). 0xC0 = potenza standard del
-// Flipper (~+10 dBm); per ridurla abbassa il primo byte (es. 0x60 = ~0 dBm).
+// CC1101 preset: asynchronous 2-FSK, ~2.38 kHz deviation. Register/value pairs
+// terminated by 0,0, then the PATABLE (8 bytes). 0xC0 = Flipper's standard
+// power (~+10 dBm); to lower it, decrease the first byte (e.g. 0x60 = ~0 dBm).
 static const uint8_t pmr_preset[] = {
     0x0B, 0x06, // FSCTRL1
-    0x08, 0x32, // PKTCTRL0: seriale asincrono, senza whitening
+    0x08, 0x32, // PKTCTRL0: async serial, no whitening
     0x07, 0x04, // PKTCTRL1
     0x14, 0x00, // MDMCFG0
     0x13, 0x02, // MDMCFG1
-    0x12, 0x04, // MDMCFG2: 2-FSK, senza preambolo/sync
+    0x12, 0x04, // MDMCFG2: 2-FSK, no preamble/sync
     0x11, 0x83, // MDMCFG3
     0x10, 0x67, // MDMCFG4
     0x15, 0x04, // DEVIATN: ~2.38 kHz
@@ -336,11 +336,11 @@ static const uint8_t pmr_preset[] = {
     0x20, 0xFB, // WORCTRL
     0x22, 0x10, // FREND0
     0x21, 0xB6, // FREND1
-    0x00, 0x00, // fine registri
+    0x00, 0x00, // end of registers
     0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // PATABLE
 };
 
-// Chiamata dal driver async TX: restituisce livello e durata (us) del prossimo tratto.
+// Called by the async TX driver: returns level and duration (us) of the next stretch.
 static LevelDuration tx_callback(void* ctx) {
     TxState* s = ctx;
     if(s->done) return level_duration_reset();
@@ -360,7 +360,7 @@ static LevelDuration tx_callback(void* ctx) {
         d = s->left_us < SILENCE_CHUNK_US ? s->left_us : SILENCE_CHUNK_US;
         s->level = false;
     } else {
-        d = 500000UL / f; // mezzo periodo
+        d = 500000UL / f; // half period
         s->level = !s->level;
     }
     if(d >= s->left_us) {
@@ -389,12 +389,12 @@ static void set_status(App* a, const char* msg) {
 
 static void transmit(App* a) {
     if(a->list.count <= 2) {
-        set_status(a, "Scegli prima un file");
+        set_status(a, "Choose a file first");
         return;
     }
     uint32_t freq = channel_freq(a);
     if(!furi_hal_subghz_is_tx_allowed(freq)) {
-        set_status(a, "TX non permessa (regione)");
+        set_status(a, "TX not allowed (region)");
         return;
     }
 
@@ -415,11 +415,11 @@ static void transmit(App* a) {
 
     if(!furi_hal_subghz_start_async_tx(tx_callback, &st)) {
         furi_hal_subghz_sleep();
-        set_status(a, "Avvio TX fallito");
+        set_status(a, "TX start failed");
         return;
     }
 
-    set_status(a, "Trasmissione...");
+    set_status(a, "Transmitting...");
     bool aborted = false;
     InputEvent ev;
     while(!furi_hal_subghz_is_async_tx_complete()) {
@@ -432,10 +432,10 @@ static void transmit(App* a) {
     }
     furi_hal_subghz_stop_async_tx();
     furi_hal_subghz_sleep();
-    set_status(a, aborted ? "Interrotta" : "Fatto");
+    set_status(a, aborted ? "Aborted" : "Done");
 }
 
-/* ---------- file ---------- */
+/* ---------- files ---------- */
 
 static void load_file(App* a, const char* path) {
     a->list.count = 0;
@@ -454,7 +454,7 @@ static void load_file(App* a, const char* path) {
     storage_file_free(f);
 
     if(!buf) {
-        set_status(a, "Errore lettura file");
+        set_status(a, "File read error");
         return;
     }
 
@@ -475,13 +475,13 @@ static void load_file(App* a, const char* path) {
     const char* slash = strrchr(path, '/');
     snprintf(a->name, sizeof(a->name), "%.*s", (int)sizeof(a->name) - 1, slash ? slash + 1 : path);
 
-    if(a->list.count <= 2) set_status(a, "File vuoto o non valido");
-    else if(a->list.count >= MAX_SEGMENTS) set_status(a, "Pronto (file troncato)");
-    else set_status(a, music ? "Pronto (musica)" : "Pronto (morse)");
+    if(a->list.count <= 2) set_status(a, "Empty or invalid file");
+    else if(a->list.count >= MAX_SEGMENTS) set_status(a, "Ready (file truncated)");
+    else set_status(a, music ? "Ready (music)" : "Ready (morse)");
 }
 
-// L'ultimo file scelto viene salvato sulla SD, cosi' il browser si riapre li' anche
-// dopo aver chiuso e riaperto l'app.
+// The last chosen file is saved on the SD card, so the browser reopens there even
+// after closing and reopening the app.
 #define DATA_DIR "/ext/apps_data/tone_tx"
 #define LAST_PATH_FILE DATA_DIR "/last_path.txt"
 
@@ -506,8 +506,8 @@ static void load_last_path(App* a) {
     storage_file_free(f);
 }
 
-// Da dove far partire il browser: ultimo file scelto; se non esiste piu', la sua cartella;
-// se nemmeno quella esiste, /ext.
+// Where to start the browser: last chosen file; if it no longer exists, its folder;
+// if that doesn't exist either, /ext.
 static void browse_start_path(App* a, FuriString* out) {
     furi_string_set_str(out, "/ext");
     if(!a->last_path[0]) return;
@@ -538,14 +538,14 @@ static void pick_file(App* a) {
     furi_string_free(path);
 }
 
-/* ---------- interfaccia ---------- */
+/* ---------- user interface ---------- */
 
 #define MENU_ITEMS 3
 #define VISIBLE_LINES 6
 
 static const char* const MENU_LABELS[MENU_ITEMS] = {"Start", "Disclaimer", "About"};
 
-// Testo gia' diviso in righe da max 23 caratteri per lo schermo del Flipper.
+// Text already split into lines of max 23 characters for the Flipper screen.
 static const char* const DISCLAIMER_LINES[] = {
     "DISCLAIMER",
     "",
@@ -592,9 +592,9 @@ static const char* const DISCLAIMER_LINES[] = {
 
 static void draw_menu(Canvas* canvas, const App* a) {
     canvas_set_font(canvas, FontPrimary);
-    canvas_draw_str_aligned(canvas, 64, 9, AlignCenter, AlignBottom, "Tone TX v1.0");
+    canvas_draw_str_aligned(canvas, 64, 9, AlignCenter, AlignBottom, "Tone TX v1.1");
     canvas_set_font(canvas, FontSecondary);
-    canvas_draw_str_aligned(canvas, 64, 19, AlignCenter, AlignBottom, "by Marcopit");
+    canvas_draw_str_aligned(canvas, 64, 19, AlignCenter, AlignBottom, "by Marcopiiit");
 
     for(uint8_t i = 0; i < MENU_ITEMS; i++) {
         uint8_t top = 24 + i * 13;
@@ -619,10 +619,10 @@ static void draw_disclaimer(Canvas* canvas, const App* a) {
 
 static void draw_about(Canvas* canvas) {
     canvas_set_font(canvas, FontPrimary);
-    canvas_draw_str_aligned(canvas, 64, 24, AlignCenter, AlignBottom, "V1.0");
+    canvas_draw_str_aligned(canvas, 64, 24, AlignCenter, AlignBottom, "V1.1");
     canvas_set_font(canvas, FontSecondary);
     canvas_draw_str_aligned(canvas, 64, 40, AlignCenter, AlignBottom, "Created and tested by");
-    canvas_draw_str_aligned(canvas, 64, 52, AlignCenter, AlignBottom, "Marcopit92");
+    canvas_draw_str_aligned(canvas, 64, 52, AlignCenter, AlignBottom, "Marcopiiit");
 }
 
 static void draw_main(Canvas* canvas, const App* a) {
@@ -632,16 +632,16 @@ static void draw_main(Canvas* canvas, const App* a) {
     canvas_set_font(canvas, FontPrimary);
     canvas_draw_str(canvas, 2, 10, "Tone TX");
     canvas_set_font(canvas, FontSecondary);
-    canvas_draw_str(canvas, 2, 20, "by Marcopit");
+    canvas_draw_str(canvas, 2, 20, "by Marcopiiit");
 
     if(a->lpd) {
-        snprintf(line, sizeof(line), "Canale LPD %u  %lu.%03lu", a->channel, f / 1000000UL, (f % 1000000UL) / 1000UL);
+        snprintf(line, sizeof(line), "Ch LPD %u  %lu.%03lu", a->channel, f / 1000000UL, (f % 1000000UL) / 1000UL);
     } else {
-        snprintf(line, sizeof(line), "Canale PMR %u  %lu.%05lu", a->channel, f / 1000000UL, (f % 1000000UL) / 10UL);
+        snprintf(line, sizeof(line), "Ch PMR %u  %lu.%05lu", a->channel, f / 1000000UL, (f % 1000000UL) / 10UL);
     }
     canvas_draw_str(canvas, 2, 32, line);
 
-    snprintf(line, sizeof(line), "File: %s", a->name[0] ? a->name : "(nessuno)");
+    snprintf(line, sizeof(line), "File: %s", a->name[0] ? a->name : "(none)");
     canvas_draw_str(canvas, 2, 43, line);
 
     if(a->total_ms) snprintf(line, sizeof(line), "%s (%lu s)", a->status, (unsigned long)(a->total_ms / 1000));
@@ -667,7 +667,7 @@ static void input_cb(InputEvent* ev, void* ctx) {
     furi_message_queue_put(a->queue, ev, 0);
 }
 
-// Gestione tasti nella schermata di trasmissione (Back riporta al menu iniziale).
+// Key handling on the transmit screen (Back returns to the start menu).
 static void handle_main_key(App* a, InputKey key) {
     switch(key) {
     case InputKeyBack:
@@ -679,7 +679,7 @@ static void handle_main_key(App* a, InputKey key) {
     case InputKeyRight:
         a->channel = (a->channel < max_channel(a)) ? a->channel + 1 : 1;
         break;
-    case InputKeyDown: // alterna PMR / LPD
+    case InputKeyDown: // toggle PMR / LPD
         a->lpd = !a->lpd;
         if(a->channel > max_channel(a)) a->channel = max_channel(a);
         break;
@@ -702,7 +702,7 @@ int32_t tone_tx_app(void* p) {
     a->channel = 1;
     a->screen = ScreenMenu;
     a->list.seg = malloc(sizeof(Segment) * MAX_SEGMENTS);
-    snprintf(a->status, sizeof(a->status), "Scegli un file");
+    snprintf(a->status, sizeof(a->status), "Choose a file");
 
     a->queue = furi_message_queue_alloc(8, sizeof(InputEvent));
     a->storage = furi_record_open(RECORD_STORAGE);
